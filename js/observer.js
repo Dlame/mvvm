@@ -1,38 +1,58 @@
-var data = { name: 'Daze' };
+function Observer(data) {
+	console.log(data);
+	this.data = data;
+	this.walk(data);
+}
 
-observe(data);
-data.name = 'dmq'; // 哈哈哈，监听到值变化了 kindeng --> dmq
+Observer.prototype = {
+	constructor: Observer,
+	walk: function (data) {
+		var me = this;
+		Object.keys(data).forEach(function (key) {
+			me.convert(key, data[key]);
+		});
+	},
+	convert: function (key, val) {
+		this.defineReactive(this.data, key, val);
+	},
+	defineReactive: function (data, key, val) {
+		var dep = new Dep();
+		var childObj = observe(val);
 
-function observe(data) {
-	if (!data || typeof data !== 'object') {
+		Object.defineProperty(data, key, {
+			enumerable: true, // 可枚举
+			configurable: false, // 不能再define
+			get: function () {
+				if (Dep.target) {
+					dep.depend();
+				}
+				return val;
+			},
+			set: function (newVal) {
+				if (newVal === val) {
+					return;
+				}
+				val = newVal;
+				// 新的值是object的话，进行监听
+				childObj = observe(newVal);
+				// 通知订阅者
+				dep.notify();
+			}
+		});
+	}
+};
+
+function observe(value, vm) {
+	if (!value || typeof value !== 'object') {
 		return;
-  }
-  // 给data所有属性分配监听器
-	Object.keys(data).forEach(function (key) {
-		defineReactive(data, key, data[key]);
-	});
+	}
+
+	return new Observer(value);
 }
 
-function defineReactive(data, key, val) {
-	var dep = new Dep();
-	observe(val); // 监听子属性
-	Object.defineProperty(data, key, {
-		enumerable: true, // 可枚举
-		configurable: false, // 不能再define
-		get: function () {
-			// 由于需要在闭包内添加watcher，所以通过Dep定义一个全局target属性，暂存watcher, 添加完移除
-			Dep.target && dep.addDep(Dep.target);
-			return val;
-		},
-		set: function (newVal) {
-			console.log('哈哈哈，监听到值变化了 ', val, ' --> ', newVal);
-			val = newVal;
-			dep.notify(); // 通知所有订阅者
-		}
-	});
-}
-
+var uid = 0;
 function Dep() {
+	this.id = uid++;
 	this.subs = [];
 }
 
@@ -40,6 +60,18 @@ Dep.prototype = {
 	addSub: function (sub) {
 		this.subs.push(sub);
 	},
+
+	depend: function () {
+		Dep.target.addDep(this);
+	},
+
+	removeSub: function (sub) {
+		var index = this.subs.indexOf(sub);
+		if (index != -1) {
+			this.subs.splice(index, 1);
+		}
+	},
+
 	notify: function () {
 		this.subs.forEach(function (sub) {
 			sub.update();
